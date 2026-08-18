@@ -2,14 +2,329 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Control de Personal en Obra</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #343434;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .contenedor {
+            width: 90%;
+            max-width: 500px;
+            background: white;
+            padding: 35px;
+            border-radius: 18px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.15);
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-size: 27px;
+        }
+
+        .subtitulo {
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        input {
+            width: 100%;
+            padding: 15px;
+            font-size: 17px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 17px;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            background: #222;
+            color: white;
+        }
+
+        button:hover {
+            opacity: 0.85;
+        }
+
+        #resultado {
+            margin-top: 25px;
+        }
+
+        .tarjeta {
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 17px;
+        }
+
+        .en-obra {
+            background: #e4f7e9;
+            border: 2px solid #2e9d50;
+        }
+
+        .fuera {
+            background: #fde7e7;
+            border: 2px solid #d64545;
+        }
+
+        .error {
+            color: #c0392b;
+            font-weight: bold;
+        }
+
+        .nombre {
+            font-size: 21px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .subcontrato {
+            margin-top: 8px;
+        }
+
+        .estado {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
 </head>
 
 <body>
 
-    <h1>CONTROL DE PERSONAL EN OBRA</h1>
+<div class="contenedor">
 
-    <p>La página está funcionando 🏗️</p>
+    <h1>CONTROL DE PERSONAL</h1>
+
+    <div class="subtitulo">
+        Consulta de personal en obra
+    </div>
+
+    <input
+        type="text"
+        id="busqueda"
+        placeholder="Nombre y primer apellido"
+        autocomplete="off"
+    >
+
+    <button onclick="buscarPersona()">
+        🔎 BUSCAR
+    </button>
+
+    <div id="resultado"></div>
+
+</div>
+
+
+<script>
+
+    const URL_GOOGLE_SHEETS =
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vTgJyynGT8BhmT-KM0ucyVfp71l5bTAXNbRwpDBGh_8TvSDFIIKhyxvZ4BArW3KYUB9RYbSdZeiroUC/pub?gid=0&single=true&output=csv";
+
+
+    function normalizar(texto) {
+
+        return texto
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim()
+            .toUpperCase();
+
+    }
+
+
+    async function buscarPersona() {
+
+        const busqueda = document.getElementById("busqueda").value;
+        const resultado = document.getElementById("resultado");
+
+        if (!busqueda.trim()) {
+
+            resultado.innerHTML =
+            '<p class="error">Ingresa un nombre y apellido.</p>';
+
+            return;
+        }
+
+        resultado.innerHTML = "<p>Buscando...</p>";
+
+        try {
+
+            const respuesta = await fetch(URL_GOOGLE_SHEETS);
+
+            const texto = await respuesta.text();
+
+            const filas = texto.trim().split("\n");
+
+            const encabezados = filas[0]
+                .split(",")
+                .map(columna => normalizar(columna));
+
+            const personas = filas.slice(1).map(fila => {
+
+                const columnas = fila.split(",");
+
+                let persona = {};
+
+                encabezados.forEach((encabezado, indice) => {
+
+                    persona[encabezado] =
+                    columnas[indice]
+                    ? columnas[indice].trim()
+                    : "";
+
+                });
+
+                return persona;
+
+            });
+
+
+            const textoBusqueda = normalizar(busqueda);
+
+            const personaEncontrada = personas.find(persona => {
+
+                const nombre =
+                    normalizar(persona["NOMBRE"] || "");
+
+                const apellido =
+                    normalizar(persona["PRIMER APELLIDO"] || "");
+
+                const nombreCompleto =
+                    `${nombre} ${apellido}`;
+
+                return nombreCompleto === textoBusqueda;
+
+            });
+
+
+            if (!personaEncontrada) {
+
+                resultado.innerHTML = `
+                    <div class="tarjeta fuera">
+
+                        <div class="estado">
+                            🔴 NO ENCONTRADO
+                        </div>
+
+                        <p>
+                            La persona no se encuentra registrada
+                            en la nómina.
+                        </p>
+
+                    </div>
+                `;
+
+                return;
+            }
+
+
+            const estado =
+                normalizar(personaEncontrada["ESTADO"] || "");
+
+            const nombre =
+                personaEncontrada["NOMBRE"] || "";
+
+            const apellido =
+                personaEncontrada["PRIMER APELLIDO"] || "";
+
+            const subcontrato =
+                personaEncontrada["SUBCONTRATO"] || "";
+
+
+            if (estado === "EN OBRA") {
+
+                resultado.innerHTML = `
+
+                    <div class="tarjeta en-obra">
+
+                        <div class="estado">
+                            🟢 EN OBRA
+                        </div>
+
+                        <div class="nombre">
+                            ${nombre} ${apellido}
+                        </div>
+
+                        <div class="subcontrato">
+                            <strong>Subcontrato:</strong>
+                            ${subcontrato}
+                        </div>
+
+                    </div>
+
+                `;
+
+            } else {
+
+                resultado.innerHTML = `
+
+                    <div class="tarjeta fuera">
+
+                        <div class="estado">
+                            🔴 FUERA DE OBRA
+                        </div>
+
+                        <div class="nombre">
+                            ${nombre} ${apellido}
+                        </div>
+
+                        <div class="subcontrato">
+                            <strong>Subcontrato:</strong>
+                            ${subcontrato}
+                        </div>
+
+                    </div>
+
+                `;
+
+            }
+
+        } catch (error) {
+
+            resultado.innerHTML = `
+                <p class="error">
+                    ⚠️ No fue posible conectar con la nómina.
+                    Intenta nuevamente.
+                </p>
+            `;
+
+            console.error(error);
+
+        }
+
+    }
+
+
+    document.getElementById("busqueda").addEventListener("keydown", function(event) {
+
+        if (event.key === "Enter") {
+            buscarPersona();
+        }
+
+    });
+
+</script>
 
 </body>
 </html>
